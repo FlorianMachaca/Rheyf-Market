@@ -1,0 +1,959 @@
+openapi: 3.1.0
+info:
+  title: API RHEYF MARKET
+  version: 1.0.0
+  description: >-
+    Contrato de planificación para la tienda de kits de cultivo. Operaciones y
+    mensajes de dominio en español. Pagos y reembolsos exclusivamente simulados.
+    Las rutas /admin requieren rol ADMINISTRADOR además de sesión; cada mutación
+    autenticada con cookie requiere protección CSRF. Los identificadores de
+    recurso nunca sustituyen la verificación de propiedad en el servidor.
+servers:
+  - url: /api/v1
+    description: API versionada; el host se configura por entorno.
+tags:
+  - { name: Catálogo }
+  - { name: Identidad }
+  - { name: Carrito }
+  - { name: Compra }
+  - { name: Pedidos }
+  - { name: Atención }
+  - { name: Chatbot }
+  - { name: Administración }
+security: []
+paths:
+  /categories:
+    get:
+      tags: [Catálogo]
+      summary: Listar categorías publicadas
+      responses:
+        '200':
+          description: Categorías disponibles.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Category' } }
+  /products:
+    get:
+      tags: [Catálogo]
+      summary: Buscar kits publicados
+      parameters:
+        - { in: query, name: q, schema: { type: string, maxLength: 120 } }
+        - { in: query, name: category, schema: { type: string } }
+        - { in: query, name: minPrice, schema: { type: number, minimum: 0 } }
+        - { in: query, name: maxPrice, schema: { type: number, minimum: 0 } }
+        - { in: query, name: difficulty, schema: { type: string, enum: [PRINCIPIANTE, INTERMEDIO, AVANZADO] } }
+        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+        - { in: query, name: pageSize, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Resultados paginados.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductPage' }
+        '400': { $ref: '#/components/responses/Error' }
+  /products/{productId}:
+    get:
+      tags: [Catálogo]
+      summary: Ver ficha de kit publicado
+      parameters:
+        - { $ref: '#/components/parameters/ProductId' }
+      responses:
+        '200':
+          description: Ficha con disponibilidad calculada, contenido e instrucciones.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '404': { $ref: '#/components/responses/Error' }
+  /promotions/active:
+    get:
+      tags: [Catálogo]
+      summary: Listar ofertas vigentes visibles en la tienda
+      description: Devuelve solo promociones activas y publicables; el cálculo definitivo del descuento ocurre al cotizar el carrito.
+      responses:
+        '200':
+          description: Ofertas públicas en su periodo de vigencia.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ActivePromotion' } }
+  /auth/register:
+    post:
+      tags: [Identidad]
+      summary: Registrar una cuenta Cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201': { description: Cuenta creada con rol CLIENTE. }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { description: Correo ya registrado., content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /auth/login:
+    post:
+      tags: [Identidad]
+      summary: Iniciar sesión
+      description: La sesión se entrega en cookie HttpOnly; la respuesta no incluye el secreto de sesión.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200': { description: Sesión iniciada; cookie de sesión emitida. }
+        '401': { $ref: '#/components/responses/Error' }
+  /auth/logout:
+    post:
+      tags: [Identidad]
+      security: [{ sessionCookie: [] }]
+      summary: Cerrar y revocar la sesión actual
+      responses:
+        '204': { description: Sesión revocada. }
+        '401': { $ref: '#/components/responses/Error' }
+  /auth/me:
+    get:
+      tags: [Identidad]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar identidad de la sesión
+      responses:
+        '200':
+          description: Usuario y rol actuales.
+          content: { application/json: { schema: { $ref: '#/components/schemas/SessionUser' } } }
+        '401': { $ref: '#/components/responses/Error' }
+  /customers/me:
+    get:
+      tags: [Identidad]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar perfil propio
+      responses:
+        '200': { description: Perfil del cliente., content: { application/json: { schema: { $ref: '#/components/schemas/CustomerProfile' } } } }
+        '401': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Identidad]
+      security: [{ sessionCookie: [] }]
+      summary: Actualizar perfil propio
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CustomerProfileInput' } } }
+      responses:
+        '200': { description: Perfil actualizado. }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /customers/me/addresses:
+    get:
+      tags: [Identidad]
+      security: [{ sessionCookie: [] }]
+      summary: Listar direcciones propias
+      responses:
+        '200': { description: Direcciones del cliente., content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Address' } } } } }
+    post:
+      tags: [Identidad]
+      security: [{ sessionCookie: [] }]
+      summary: Crear dirección propia
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AddressInput' } } }
+      responses:
+        '201': { description: Dirección creada. }
+        '400': { $ref: '#/components/responses/Error' }
+  /customers/me/addresses/{addressId}:
+    parameters:
+      - { in: path, name: addressId, required: true, schema: { type: integer, format: int64 } }
+    patch:
+      tags: [Identidad]
+      security: [{ sessionCookie: [] }]
+      summary: Actualizar dirección propia que no esté bloqueada por un pedido
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AddressInput' } } }
+      responses:
+        '200': { description: Dirección actualizada. }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Identidad]
+      security: [{ sessionCookie: [] }]
+      summary: Eliminar dirección propia no referenciada por pedido
+      responses:
+        '204': { description: Dirección eliminada. }
+        '409': { $ref: '#/components/responses/Error' }
+  /cart:
+    get:
+      tags: [Carrito]
+      summary: Consultar carrito anónimo o propio
+      description: El carrito anónimo se identifica mediante cookie opaca temporal; al iniciar sesión se reconcilian sus líneas.
+      responses:
+        '200': { description: Líneas y precios/disponibilidad vigentes., content: { application/json: { schema: { $ref: '#/components/schemas/Cart' } } } }
+    put:
+      tags: [Carrito]
+      summary: Agregar kit o fijar su cantidad en carrito
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CartItemInput' } } }
+      responses:
+        '200': { description: Carrito recalculado. }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { description: Stock insuficiente o producto no disponible., content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /cart/items/{productId}:
+    delete:
+      tags: [Carrito]
+      summary: Quitar producto del carrito
+      parameters: [{ $ref: '#/components/parameters/ProductId' }]
+      responses:
+        '204': { description: Línea quitada. }
+  /cart/quote:
+    post:
+      tags: [Carrito]
+      summary: Cotizar carrito, promoción/cupón y distrito
+      description: Recalcula todo en servidor. Devuelve el mayor ahorro elegible; nunca acumula dos descuentos.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/QuoteRequest' } } }
+      responses:
+        '200': { description: Cotización vigente en PEN., content: { application/json: { schema: { $ref: '#/components/schemas/Quote' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /checkout/orders:
+    post:
+      tags: [Compra]
+      security: [{ sessionCookie: [] }]
+      summary: Crear pedido y reservar inventario durante 15 minutos
+      description: Operación idempotente; valida propiedad de dirección, cobertura, precio, promoción y stock bajo transacción.
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { in: header, name: X-CSRF-Token, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CheckoutRequest' } } }
+      responses:
+        '201': { description: Pedido pendiente y reserva activa., content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '409': { description: Sin cobertura, stock o cotización vigente., content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /orders:
+    get:
+      tags: [Pedidos]
+      security: [{ sessionCookie: [] }]
+      summary: Listar pedidos propios (administración usa /admin/orders)
+      responses:
+        '200': { description: Historial propio., content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Order' } } } } }
+  /orders/{orderId}:
+    parameters: [{ in: path, name: orderId, required: true, schema: { type: integer, format: int64 } }]
+    get:
+      tags: [Pedidos]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar pedido propio con pagos e historial
+      responses:
+        '200': { description: Pedido., content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+  /orders/{orderId}/payment-attempts:
+    post:
+      tags: [Compra]
+      security: [{ sessionCookie: [] }]
+      summary: Crear intento de pago simulado
+      description: No se reciben datos bancarios. Solo se permite simular resultado configurado si no existe intento pendiente.
+      parameters:
+        - { in: path, name: orderId, required: true, schema: { type: integer, format: int64 } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { in: header, name: X-CSRF-Token, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PaymentAttemptInput' } } }
+      responses:
+        '201': { description: Intento simulado creado., content: { application/json: { schema: { $ref: '#/components/schemas/Payment' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /orders/{orderId}/cancel:
+    post:
+      tags: [Pedidos]
+      security: [{ sessionCookie: [] }]
+      summary: Cancelar pedido propio aún pendiente de pago
+      parameters:
+        - { in: path, name: orderId, required: true, schema: { type: integer, format: int64 } }
+        - { in: header, name: Idempotency-Key, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-CSRF-Token, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Pedido cancelado y reserva liberada. }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/payments/{paymentId}/resolve:
+    post:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Resolver pago pendiente mientras la reserva sigue vigente
+      description: Solo ADMINISTRADOR; resultado permitido APROBADO o RECHAZADO.
+      parameters:
+        - { in: path, name: paymentId, required: true, schema: { type: integer, format: int64 } }
+        - { in: header, name: Idempotency-Key, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-CSRF-Token, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [result], properties: { result: { type: string, enum: [APROBADO, RECHAZADO] } } } } }
+      responses:
+        '200': { description: Pago resuelto y pedido/inventario coordinados. }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /complaints:
+    post:
+      tags: [Atención]
+      summary: Registrar queja o reclamo en el Libro, sin requerir cuenta
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ComplaintInput' } } }
+      responses:
+        '201': { description: Código de seguimiento y fecha límite., content: { application/json: { schema: { $ref: '#/components/schemas/ComplaintReceipt' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+  /complaints/{complaintNumber}/copies/{accessToken}:
+    get:
+      tags: [Atención]
+      summary: Obtener copia y estado usando número correlativo y token privado
+      parameters:
+        - { in: path, name: complaintNumber, required: true, schema: { type: integer, format: int64 } }
+        - { in: path, name: accessToken, required: true, schema: { type: string, minLength: 32 }, description: Token privado entregado al consumidor. }
+      responses:
+        '200': { description: Estado y respuesta pública sin datos de contacto., content: { application/json: { schema: { $ref: '#/components/schemas/ComplaintStatus' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+  /returns:
+    post:
+      tags: [Atención]
+      security: [{ sessionCookie: [] }]
+      summary: Solicitar devolución de líneas de un pedido propio
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ReturnRequestInput' } } }
+      responses:
+        '201': { description: Solicitud con código y estado inicial. }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /returns/{publicCode}:
+    get:
+      tags: [Atención]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar devolución propia
+      parameters: [{ in: path, name: publicCode, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: Estado, resolución e inspección. }
+        '404': { $ref: '#/components/responses/Error' }
+  /support/requests/{publicCode}:
+    get:
+      tags: [Atención]
+      summary: Consultar solicitud de visitante con referencia y correo de contacto
+      parameters:
+        - { in: path, name: publicCode, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: contactEmail, required: true, schema: { type: string, format: email } }
+      responses:
+        '200': { description: Estado y respuestas públicas de la solicitud propia. }
+        '404': { $ref: '#/components/responses/Error' }
+  /customers/me/support/requests:
+    get:
+      tags: [Atención]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar solicitudes propias y respuestas
+      responses: { '200': { description: Solicitudes del cliente autenticado. } }
+  /support/requests:
+    post:
+      tags: [Chatbot, Atención]
+      summary: Registrar solicitud de atención no resuelta
+      security: []
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SupportRequestInput' } } }
+      responses:
+        '201': { description: Referencia de seguimiento. }
+  /chatbot/messages:
+    post:
+      tags: [Chatbot]
+      summary: Consultar catálogo, instrucciones aprobadas o datos propios autenticados
+      description: Consultas privadas exigen sesión; nunca devuelve datos de otros usuarios ni genera instrucciones sin fuente aprobada.
+      security:
+        - sessionCookie: []
+        - {}
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ChatMessageInput' } } }
+      responses:
+        '200': { description: Respuesta con fuente o indicación de que no hay información., content: { application/json: { schema: { $ref: '#/components/schemas/ChatReply' } } } }
+        '401': { $ref: '#/components/responses/Error' }
+  /admin/products:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Listar catálogo administrativo, incluidos no publicados
+      responses:
+        '200': { description: Catálogo para administración. }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Crear kit de cultivo
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } }
+      responses:
+        '201': { description: Kit creado. }
+        '403': { $ref: '#/components/responses/Error' }
+  /admin/products/{productId}:
+    parameters: [{ $ref: '#/components/parameters/ProductId' }]
+    patch:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Editar producto/categoría/precio/contenido/publicación
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } }
+      responses:
+        '200': { description: Kit actualizado. }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /admin/categories:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Listar categorías para administración
+      responses: { '200': { description: Categorías activas e inactivas. } }
+    post:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Crear categoría de kits
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CategoryInput' } } }
+      responses: { '201': { description: Categoría creada. } }
+  /admin/categories/{categoryId}:
+    patch:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Actualizar datos o desactivar categoría
+      parameters: [{ in: path, name: categoryId, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CategoryInput' } } }
+      responses: { '200': { description: Categoría actualizada. } }
+  /admin/delivery-districts:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar cobertura y tarifa fija por distrito
+      responses: { '200': { description: Distritos habilitados y deshabilitados. } }
+    put:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Crear o actualizar tarifa/cobertura de un distrito
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DeliveryDistrictInput' } } }
+      responses: { '200': { description: Distrito guardado. } }
+  /admin/customers:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Buscar clientes sin mostrar credenciales
+      parameters: [{ in: query, name: q, schema: { type: string } }]
+      responses: { '200': { description: Perfiles mínimos paginados. } }
+  /admin/customers/{userId}:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar perfil/actividad comercial autorizada
+      parameters: [{ in: path, name: userId, required: true, schema: { type: integer, format: int64 } }]
+      responses: { '200': { description: Perfil sin credenciales. } }
+  /admin/users/{userId}/role:
+    patch:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Asignar o revocar rol administrador
+      description: Impide desactivar o degradar al último administrador activo; registra auditoría.
+      parameters: [{ in: path, name: userId, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [role], properties: { role: { type: string, enum: [CLIENTE, ADMINISTRADOR] } } } } }
+      responses:
+        '200': { description: Rol actualizado y auditado. }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/inventory/{productId}/movements:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar saldo y movimientos de inventario
+      parameters: [{ $ref: '#/components/parameters/ProductId' }]
+      responses: { '200': { description: Saldo físico, reservado, disponible y ledger. } }
+    post:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Registrar entrada, ajuste o salida administrativa
+      parameters:
+        - { $ref: '#/components/parameters/ProductId' }
+        - { in: header, name: Idempotency-Key, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-CSRF-Token, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/InventoryMovementInput' } } }
+      responses:
+        '201': { description: Movimiento registrado atómicamente. }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/orders:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Buscar pedidos para operación
+      parameters:
+        - { in: query, name: status, schema: { type: string } }
+        - { in: query, name: from, schema: { type: string, format: date } }
+        - { in: query, name: to, schema: { type: string, format: date } }
+      responses: { '200': { description: Pedidos paginados y filtros aplicados. } }
+  /admin/orders/{orderId}/cancel:
+    post:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Cancelar pedido antes del despacho
+      description: Si está aprobado, coordina reembolso simulado y reposición de unidades no enviadas.
+      parameters:
+        - { in: path, name: orderId, required: true, schema: { type: integer, format: int64 } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { in: header, name: X-CSRF-Token, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string, maxLength: 500 } } } } }
+      responses:
+        '200': { description: Cancelación, reembolso e inventario coordinados. }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/orders/{orderId}/status:
+    patch:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Avanzar al siguiente estado permitido
+      parameters:
+        - { in: path, name: orderId, required: true, schema: { type: integer, format: int64 } }
+        - { in: header, name: X-CSRF-Token, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [status], properties: { status: { type: string, enum: [EN_PREPARACION, DESPACHADO, ENTREGADO] }, note: { type: string, maxLength: 500 }, shipmentReference: { type: [string, 'null'], maxLength: 120 } } } } }
+      responses:
+        '200': { description: Estado e historial actualizados. }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/promotions:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar promociones y cupones
+      responses: { '200': { description: Promociones administrables. } }
+    post:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Crear promoción o cupón
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PromotionInput' } } }
+      responses: { '201': { description: Promoción creada. } }
+  /admin/promotions/{promotionId}:
+    patch:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Actualizar o desactivar promoción/cupón
+      parameters: [{ in: path, name: promotionId, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PromotionInput' } } }
+      responses: { '200': { description: Promoción actualizada. } }
+  /admin/payments:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar pagos simulados por resultado y periodo
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [PENDIENTE, APROBADO, RECHAZADO, VENCIDO] } }
+        - { in: query, name: from, schema: { type: string, format: date } }
+        - { in: query, name: to, schema: { type: string, format: date } }
+      responses: { '200': { description: Intentos sin datos bancarios. } }
+  /admin/returns:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar solicitudes de devolución por estado
+      parameters: [{ in: query, name: status, schema: { type: string } }]
+      responses: { '200': { description: Cola administrativa de devoluciones. } }
+  /admin/complaints:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar Libro de Reclamaciones y fechas límite
+      responses: { '200': { description: Reclamos con filtros y estado. } }
+  /admin/complaints/{complaintId}:
+    patch:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Cambiar estado o registrar respuesta escrita
+      parameters: [{ in: path, name: complaintId, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ComplaintResolutionInput' } } }
+      responses:
+        '200': { description: Evento y respuesta registrados. }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/returns/{returnId}:
+    patch:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Revisar devolución, inspeccionar y registrar decisión/reembolso simulado
+      parameters: [{ in: path, name: returnId, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ReturnResolutionInput' } } }
+      responses:
+        '200': { description: Resolución registrada; reposición condicionada a inspección favorable. }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/support/requests:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Consultar solicitudes de atención
+      responses: { '200': { description: Solicitudes para seguimiento. } }
+  /admin/reports/sales:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Resumen de ventas, ingresos y pedidos
+      parameters:
+        - { in: query, name: from, required: true, schema: { type: string, format: date } }
+        - { in: query, name: to, required: true, schema: { type: string, format: date } }
+      responses: { '200': { description: Totales netos, periodo America/Lima y pedidos por estado. } }
+  /admin/reports/best-sellers:
+    get:
+      tags: [Administración]
+      security: [{ sessionCookie: [] }]
+      summary: Kits más vendidos netos de devoluciones
+      parameters:
+        - { in: query, name: from, required: true, schema: { type: string, format: date } }
+        - { in: query, name: to, required: true, schema: { type: string, format: date } }
+      responses: { '200': { description: Unidades pagadas menos devueltas en el periodo. } }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: rheyf_session
+  parameters:
+    ProductId:
+      in: path
+      name: productId
+      required: true
+      schema: { type: integer, format: int64 }
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Error:
+      description: Error de validación, autorización, recurso o regla de negocio.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+  schemas:
+    ApiError:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, description: Código estable para lógica de cliente. }
+        message: { type: string, description: Mensaje claro en español. }
+        details: { type: array, items: { type: object, properties: { field: { type: string }, message: { type: string } } } }
+        correlationId: { type: string, format: uuid }
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount: { type: string, pattern: '^\\d+\\.\\d{2}$', examples: ['89.90'] }
+        currency: { type: string, const: PEN }
+    Category:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+    ActivePromotion:
+      type: object
+      required: [name, kind, value, startsAt, endsAt]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [PORCENTAJE, MONTO_FIJO] }
+        value: { type: number }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+    ProductImage:
+      type: object
+      required: [url, altText]
+      properties:
+        url: { type: string, format: uri-reference }
+        altText: { type: string }
+    ProductComponent:
+      type: object
+      required: [name, quantity, unit]
+      properties:
+        name: { type: string }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        unit: { type: string }
+    Product:
+      type: object
+      required: [id, sku, name, category, species, difficulty, recommendedSpace, lightRequirements, components, instructions, price, availableStock]
+      properties:
+        id: { type: integer, format: int64 }
+        sku: { type: string }
+        name: { type: string }
+        category: { $ref: '#/components/schemas/Category' }
+        species: { type: string }
+        variety: { type: [string, 'null'] }
+        difficulty: { type: string, enum: [PRINCIPIANTE, INTERMEDIO, AVANZADO] }
+        recommendedSpace: { type: string }
+        lightRequirements: { type: string }
+        components: { type: array, items: { $ref: '#/components/schemas/ProductComponent' } }
+        instructions: { type: string }
+        images: { type: array, items: { $ref: '#/components/schemas/ProductImage' } }
+        price: { $ref: '#/components/schemas/Money' }
+        availableStock: { type: integer, minimum: 0 }
+    ProductPage:
+      type: object
+      required: [items, page, pageSize, totalItems]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Product' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalItems: { type: integer }
+    RegisterRequest:
+      type: object
+      required: [email, password, firstName, lastName]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 10, writeOnly: true }
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: string, maxLength: 100 }
+        phone: { type: [string, 'null'], maxLength: 30 }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, writeOnly: true }
+    SessionUser:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        email: { type: string, format: email }
+        role: { type: string, enum: [CLIENTE, ADMINISTRADOR] }
+    CustomerProfile:
+      type: object
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        phone: { type: [string, 'null'] }
+    CustomerProfileInput:
+      type: object
+      properties:
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: string, maxLength: 100 }
+        phone: { type: [string, 'null'], maxLength: 30 }
+    AddressInput:
+      type: object
+      required: [recipientName, phone, department, province, district, addressLine]
+      properties:
+        recipientName: { type: string, maxLength: 150 }
+        phone: { type: string, maxLength: 30 }
+        department: { type: string, maxLength: 100 }
+        province: { type: string, maxLength: 100 }
+        district: { type: string, maxLength: 100 }
+        addressLine: { type: string, maxLength: 300 }
+        reference: { type: [string, 'null'], maxLength: 250 }
+        isDefault: { type: boolean }
+    Address:
+      allOf: [{ $ref: '#/components/schemas/AddressInput' }, { type: object, properties: { id: { type: integer, format: int64 } } }]
+    DeliveryDistrictInput:
+      type: object
+      required: [department, province, district, deliveryFee, enabled]
+      properties:
+        department: { type: string, maxLength: 100 }
+        province: { type: string, maxLength: 100 }
+        district: { type: string, maxLength: 100 }
+        deliveryFee: { type: number, minimum: 0 }
+        enabled: { type: boolean }
+    CartItemInput:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId: { type: integer, format: int64 }
+        quantity: { type: integer, minimum: 1 }
+    Cart:
+      type: object
+      properties:
+        items: { type: array, items: { type: object, properties: { product: { $ref: '#/components/schemas/Product' }, quantity: { type: integer }, lineSubtotal: { $ref: '#/components/schemas/Money' } } } }
+        itemsSubtotal: { $ref: '#/components/schemas/Money' }
+    QuoteRequest:
+      type: object
+      required: [district]
+      properties:
+        district: { type: string }
+        couponCode: { type: [string, 'null'], maxLength: 50 }
+    Quote:
+      type: object
+      required: [currency, itemsSubtotal, discount, deliveryFee, total, expiresAt]
+      properties:
+        currency: { type: string, const: PEN }
+        itemsSubtotal: { $ref: '#/components/schemas/Money' }
+        discount: { $ref: '#/components/schemas/Money' }
+        discountSource: { type: [string, 'null'], enum: [PROMOCION, CUPON, null] }
+        deliveryFee: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+        expiresAt: { type: string, format: date-time }
+        changes: { type: array, items: { type: string } }
+    CheckoutRequest:
+      type: object
+      required: [addressId]
+      properties:
+        addressId: { type: integer, format: int64 }
+        couponCode: { type: [string, 'null'] }
+        acceptedQuoteFingerprint: { type: string, description: Huella opaca de la última cotización mostrada. }
+    Order:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        publicCode: { type: string, format: uuid }
+        status: { type: string, enum: [PENDIENTE_PAGO, CONFIRMADO, EN_PREPARACION, DESPACHADO, ENTREGADO, CANCELADO] }
+        currency: { type: string, const: PEN }
+        itemsSubtotal: { $ref: '#/components/schemas/Money' }
+        discount: { $ref: '#/components/schemas/Money' }
+        deliveryFee: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+        reservationExpiresAt: { type: [string, 'null'], format: date-time }
+        items: { type: array, items: { type: object, properties: { productName: { type: string }, quantity: { type: integer }, unitPrice: { $ref: '#/components/schemas/Money' }, lineTotal: { $ref: '#/components/schemas/Money' } } } }
+        events: { type: array, items: { type: object, properties: { from: { type: [string, 'null'] }, to: { type: string }, occurredAt: { type: string, format: date-time }, note: { type: [string, 'null'] } } } }
+    PaymentAttemptInput:
+      type: object
+      required: [simulatedResult]
+      properties:
+        simulatedResult: { type: string, enum: [APROBADO, RECHAZADO, PENDIENTE] }
+    Payment:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        attemptNumber: { type: integer }
+        amount: { $ref: '#/components/schemas/Money' }
+        status: { type: string, enum: [PENDIENTE, APROBADO, RECHAZADO, VENCIDO] }
+        createdAt: { type: string, format: date-time }
+    ComplaintInput:
+      type: object
+      required: [consumerName, documentType, documentNumber, consumerEmail, copyChannel, kind, productOrService, description, requestedSolution]
+      properties:
+        consumerName: { type: string, maxLength: 180 }
+        documentType: { type: string, enum: [DNI, CE, PASAPORTE, OTRO] }
+        documentNumber: { type: string, maxLength: 20 }
+        consumerEmail: { type: string, format: email }
+        consumerPhone: { type: [string, 'null'] }
+        orderPublicCode: { type: [string, 'null'], format: uuid }
+        copyChannel: { type: string, enum: [CORREO, PRESENCIAL] }
+        kind: { type: string, enum: [QUEJA, RECLAMO] }
+        productOrService: { type: string, maxLength: 250 }
+        amountClaimed: { type: [number, 'null'], minimum: 0 }
+        description: { type: string, maxLength: 4000 }
+        requestedSolution: { type: string, maxLength: 2000 }
+    ComplaintReceipt:
+      type: object
+      properties:
+        complaintNumber: { type: integer, format: int64, description: Número correlativo del Libro. }
+        accessToken: { type: string, description: Token privado de un solo despliegue para consultar/descargar copia. }
+        receivedAt: { type: string, format: date-time }
+        responseDueAt: { type: string, format: date-time }
+    ComplaintStatus:
+      type: object
+      properties:
+        complaintNumber: { type: integer, format: int64 }
+        status: { type: string }
+        receivedAt: { type: string, format: date-time }
+        responseDueAt: { type: string, format: date-time }
+        response: { type: [string, 'null'] }
+    ReturnRequestInput:
+      type: object
+      required: [orderId, reasonType, description, items]
+      properties:
+        orderId: { type: integer, format: int64 }
+        reasonType: { type: string, enum: [CAMBIO_OPINION, DEFECTO, FALTA_CONFORMIDAD, OTRO] }
+        description: { type: string, maxLength: 2000 }
+        items: { type: array, minItems: 1, items: { type: object, required: [orderItemId, quantity], properties: { orderItemId: { type: integer, format: int64 }, quantity: { type: integer, minimum: 1 } } } }
+    ReturnResolutionInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [EN_EVALUACION, APROBADA, PRODUCTO_RECIBIDO, REEMBOLSADA, RECHAZADA, CERRADA] }
+        inspectionResult: { type: [string, 'null'], enum: [APTA, NO_APTA, null] }
+        refundAmount: { type: [number, 'null'], minimum: 0 }
+        note: { type: string, maxLength: 2000 }
+    SupportRequestInput:
+      type: object
+      required: [subject, message]
+      properties:
+        subject: { type: string, maxLength: 180 }
+        message: { type: string, maxLength: 4000 }
+        contactEmail: { type: [string, 'null'], format: email }
+    ChatMessageInput:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 2000 }
+        orderPublicCode: { type: [string, 'null'], format: uuid }
+        complaintNumber: { type: [integer, 'null'], format: int64 }
+    ChatReply:
+      type: object
+      properties:
+        answer: { type: string }
+        sourceType: { type: string, enum: [PRODUCTO, INSTRUCCION, PEDIDO, RECLAMO, SIN_RESULTADO] }
+        sourceReference: { type: [string, 'null'] }
+        supportRequestCode: { type: [string, 'null'], format: uuid }
+    ProductInput:
+      type: object
+      required: [categoryId, sku, name, description, species, difficulty, recommendedSpace, lightRequirements, components, instructions, price]
+      properties:
+        categoryId: { type: integer }
+        sku: { type: string, maxLength: 60 }
+        name: { type: string, maxLength: 180 }
+        description: { type: string, maxLength: 2000 }
+        species: { type: string, maxLength: 120 }
+        variety: { type: [string, 'null'], maxLength: 120 }
+        difficulty: { type: string, enum: [PRINCIPIANTE, INTERMEDIO, AVANZADO] }
+        recommendedSpace: { type: string, maxLength: 300 }
+        lightRequirements: { type: string, maxLength: 500 }
+        components: { type: array, items: { $ref: '#/components/schemas/ProductComponent' } }
+        instructions: { type: string }
+        images: { type: array, items: { $ref: '#/components/schemas/ProductImage' } }
+        price: { type: number, minimum: 0 }
+        isPublished: { type: boolean }
+        isFeatured: { type: boolean }
+    CategoryInput:
+      type: object
+      required: [name, slug]
+      properties:
+        name: { type: string, maxLength: 100 }
+        slug: { type: string, maxLength: 120 }
+        description: { type: [string, 'null'], maxLength: 500 }
+        isActive: { type: boolean }
+        sortOrder: { type: integer }
+    InventoryMovementInput:
+      type: object
+      required: [kind, quantity, reason]
+      properties:
+        kind: { type: string, enum: [ENTRADA, AJUSTE, SALIDA] }
+        quantity: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    PromotionInput:
+      type: object
+      required: [name, kind, value, startsAt, endsAt, minimumSubtotal]
+      properties:
+        name: { type: string, maxLength: 150 }
+        kind: { type: string, enum: [PORCENTAJE, MONTO_FIJO] }
+        value: { type: number, exclusiveMinimum: 0 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        minimumSubtotal: { type: number, minimum: 0 }
+        couponCode: { type: [string, 'null'], maxLength: 50 }
+        eligibleProductIds: { type: array, items: { type: integer, format: int64 } }
+        eligibleCategoryIds: { type: array, items: { type: integer } }
+    ComplaintResolutionInput:
+      type: object
+      properties:
+        status: { type: string, enum: [EN_REVISION, REQUIERE_INFORMACION, RESUELTA, CERRADA] }
+        responseText: { type: string, maxLength: 4000 }
+        publicMessage: { type: string, maxLength: 2000 }
+        internalNote: { type: string, maxLength: 1000 }

@@ -15,13 +15,12 @@
 - Q: ¿Qué roles y permisos tendrá la tienda? → A: Visitante explora y arma un carrito temporal; Cliente compra y consulta solo sus datos; Administrador gestiona la tienda. El registro público crea solo Clientes y un Administrador autorizado asigna o revoca el rol administrativo.
 - Q: ¿Qué atributos definen el catálogo de kits? → A: Cada kit incluye categoría, especie/variedad, dificultad (Principiante, Intermedio o Avanzado), espacio y luz recomendados, contenido y cantidades, instrucciones de siembra y cuidado, imágenes, precio, publicación y stock. Categorías iniciales: Verduras, Frutas pequeñas y Plantas aromáticas.
 - Q: ¿Cómo se prepara y confirma una compra? → A: Se permite carrito temporal sin cuenta, pero checkout requiere autenticación. Solo se entrega en distritos habilitados y se aplica una tarifa fija por distrito, visible antes de confirmar.
-- Q: ¿Cómo se gestionan los pagos de prueba? → A: Cada intento se conserva como Aprobado, Rechazado o Pendiente. No se ingresan datos bancarios. Un rechazo permite reintentar durante la reserva; un intento pendiente bloquea nuevos intentos hasta resolverse o vencer.
+- Q: ¿Cómo se gestionan los pagos de prueba? → A: Cada intento se conserva como Aprobado, Rechazado o Pendiente. No se ingresan datos bancarios. Un rechazo permite reintentar durante la reserva; un intento pendiente bloquea nuevos intentos y solo un Administrador puede resolverlo como Aprobado o Rechazado antes del vencimiento.
 - Q: ¿Cuándo se reserva y descuenta el inventario? → A: Al crear el pedido se reservan todas las unidades por 15 minutos en una única operación atómica. La aprobación convierte la reserva en venta; la cancelación o vencimiento la libera. Nunca se puede aprobar después del vencimiento.
 - Q: ¿Cuáles son los estados del pedido? → A: Pendiente de pago → Confirmado → En preparación → Despachado → Entregado. Puede cancelarse mientras está pendiente o por un Administrador antes del despacho; toda transición registra fecha, responsable y estado anterior/nuevo. El seguimiento de transporte es manual, sin integración con transportistas.
 - Q: ¿Qué reglas tienen reclamos y devoluciones? → A: El Libro de Reclamaciones está accesible sin cuenta y genera código; la tienda emite respuesta escrita dentro de 15 días hábiles, según la información vigente de Indecopi. El cambio de opinión se solicita dentro de 7 días calendario de la entrega para kits completos, sellados y sin uso. Este plazo no limita reclamos legales por defectos o falta de conformidad. Las solicitudes transitan Recibida → En revisión → (Requiere información) → Resuelta → Cerrada. El Administrador resuelve y registra un reembolso simulado; el stock se repone solo tras inspección favorable.
 - Q: ¿Qué información puede usar el chatbot? → A: Responde solo con información publicada del catálogo e instrucciones, sin inventar recomendaciones. Consultar pedidos o reclamos exige autenticación y solo muestra datos propios. Si no resuelve una pregunta, crea una solicitud de atención con referencia.
-- Q: ¿Cómo se calculan promociones y reportes? → A: Como máximo se aplica un descuento por pedido; cupón y promoción automática no se acumulan. Ventas netas son pagos aprobados menos reembolsos; se excluyen pagos pendientes, rechazados y pedidos cancelados. Los más vendidos se ordenan por unidades pagadas menos devueltas, con fechas en hora de Perú.
-
+- Q: ¿Cómo se calculan promociones y reportes? → A: Como máximo se aplica un descuento por pedido; si cupón y promoción automática califican, se aplica el mayor ahorro y no se acumulan. Ventas netas son pagos aprobados menos reembolsos; se excluyen pagos pendientes, rechazados y pedidos cancelados. Los más vendidos se ordenan por unidades pagadas menos devueltas, con fechas en hora de Perú.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -152,7 +151,7 @@ Como cliente, quiero conocer el descuento y total final antes de pagar; como adm
 
 **Acceptance Scenarios**:
 
-1. **Given** un producto en promoción y un cupón válido, **When** se calcula el carrito, **Then** se aplica solo un descuento, se muestra su base y no se suman ambos beneficios.
+1. **Given** un producto en promoción y un cupón válido, **When** se calcula el carrito, **Then** se muestra cada beneficio elegible y se aplica solo el que resulte en mayor ahorro, sin sumarlos.
 2. **Given** pedidos aprobados, rechazados, pendientes, cancelados y reembolsados, **When** el administrador genera ventas netas, **Then** solo suma aprobados y resta reembolsos; más vendidos descuenta unidades devueltas.
 
 ### Edge Cases
@@ -187,7 +186,7 @@ Como cliente, quiero conocer el descuento y total final antes de pagar; como adm
 - **FR-011**: El sistema MUST mantener un registro consultable de intentos de pago y sus resultados; un rechazo no puede marcarse como pago aprobado.
 - **FR-012**: El sistema MUST descontar inventario una sola vez cuando la compra se confirma mediante pago aprobado y registrar los movimientos relacionados con pedidos y ajustes administrativos.
 - **FR-013**: El cliente MUST poder consultar sus pedidos, detalle, pago, estado actual y cronología de cambios, y el sistema MUST conservar la dirección usada en cada pedido.
-- **FR-014**: El administrador autorizado MUST poder consultar un dashboard de ventas, ingresos y pedidos, con periodo de consulta identificable.
+- **FR-014**: El administrador autorizado MUST poder consultar un dashboard de ventas, ingresos y cantidad de pedidos por estado, con periodo de consulta identificable.
 - **FR-015**: El administrador autorizado MUST poder crear, editar, publicar, despublicar y consultar productos y categorías, incluidos precios, imágenes, contenido del kit e instrucciones.
 - **FR-016**: El administrador autorizado MUST poder consultar y registrar entradas, salidas y ajustes de inventario con motivo, fecha, responsable y cantidad.
 - **FR-017**: El administrador autorizado MUST poder consultar clientes y usuarios, y gestionar pedidos, estados permitidos y pagos simulados sin exponer contraseñas.
@@ -209,19 +208,19 @@ Como cliente, quiero conocer el descuento y total final antes de pagar; como adm
 - **FR-032**: El pedido MUST seguir las transiciones Pendiente de pago → Confirmado → En preparación → Despachado → Entregado; puede pasar a Cancelado antes de confirmarse o por un Administrador antes del despacho. Cada transición queda auditada.
 - **FR-033**: Una cancelación de pedido ya aprobado MUST registrar reembolso simulado; antes del despacho, el stock no enviado vuelve a estar disponible. Después del despacho, la devolución se gestiona mediante solicitud y recepción, no por cancelación directa.
 - **FR-034**: El kit MUST incluir categoría, especie o variedad, nivel de dificultad, espacio/luz recomendados, contenido y cantidades, instrucciones de siembra/cuidado e imágenes. Solo se publica si cuenta con información, categoría y precio obligatorios.
-- **FR-035**: El Libro de Reclamaciones MUST permanecer visible y disponible para visitantes sin cuenta, generar un código correlativo y permitir al consumidor obtener copia de la solicitud. El formulario MUST guardar nombre, documento de identidad y contacto del consumidor, producto/servicio, importe, detalle, pedido concreto y solución que solicita.
+- **FR-035**: El Libro de Reclamaciones MUST permanecer visible y disponible para visitantes sin cuenta, sin costo y sin exigir que exista una compra, generar un código correlativo y permitir al consumidor obtener copia de la solicitud. El formulario MUST guardar nombre, documento de identidad y contacto del consumidor, producto/servicio, importe, detalle, pedido concreto y solución que solicita.
 - **FR-036**: El Administrador MUST responder por escrito a cada queja o reclamo en un máximo de 15 días hábiles, conservar fecha/canal/respuesta y dejarla accesible al consumidor.
 - **FR-037**: Una devolución comercial por cambio de opinión MUST solicitarse dentro de 7 días calendario de la entrega y el kit debe estar completo, sellado y sin uso; la evaluación no limitará derechos legales por defectos o falta de conformidad.
 - **FR-038**: El Administrador MUST resolver la devolución y registrar la recepción e inspección; el reembolso es simulado y el stock solo se repone si el kit está apto para venta.
 - **FR-039**: El chatbot MUST usar información publicada de productos e instrucciones, indicar cuando no conoce la respuesta y crear una solicitud de atención con referencia si el usuario lo pide.
 - **FR-040**: El chatbot MUST requerir autenticación para consultas de pedidos/reclamos y limitar la respuesta a registros del usuario autenticado.
-- **FR-041**: Las promociones automáticas y cupones MUST ser excluyentes por pedido; el sistema MUST mostrar base del descuento, importe y total antes de compra.
+- **FR-041**: Las promociones automáticas y cupones MUST ser excluyentes por pedido; si ambos califican, MUST aplicarse el que otorgue mayor ahorro. El sistema MUST mostrar base del descuento, importe y total antes de compra.
 - **FR-042**: El reporte de ventas MUST sumar pagos aprobados y restar reembolsos simulados; MUST excluir pagos pendientes, rechazados y pedidos cancelados.
 - **FR-043**: El reporte de productos más vendidos MUST ordenar por unidades pagadas menos unidades devueltas para el periodo visible seleccionado.
 - **FR-044**: Las fechas de los reportes y eventos comerciales MUST expresarse con zona horaria de Perú; el plazo de reclamos se calcula en días hábiles.
 - **FR-045**: Una cuenta Cliente MUST poder consultar sus solicitudes de atención y sus respuestas; el Visitante que deje una solicitud recibe referencia y medio de seguimiento sin acceder a pedidos.
-- **FR-046**: Las quejas y solicitudes de atención MUST transitar Recibida, En revisión, Requiere información, Resuelta y Cerrada, con historial de estado; un reclamo debe ser respondido dentro de su plazo aunque espere información adicional.
-- **FR-047**: Las devoluciones MUST transitar Recibida, En evaluación, Aprobada o Rechazada, Producto recibido, Reembolsada y Cerrada; las transiciones registran quién actuó, cuándo y la decisión.
+- **FR-046**: Las quejas y solicitudes de atención MUST transitar Recibida → En revisión → (Requiere información) → Resuelta → Cerrada, con historial; la falta de respuesta del consumidor no amplía el plazo legal del reclamo.
+- **FR-047**: Las devoluciones MUST transitar Recibida → En evaluación → Aprobada → Producto recibido → Reembolsada → Cerrada, o En evaluación → Rechazada → Cerrada; cada transición registra actor, fecha y decisión.
 - **FR-048**: El primer Administrador MUST habilitarse fuera del registro público mediante un procedimiento seguro; la administración MUST impedir que se desactive o revoque el último Administrador activo.
 ### Non-Functional Requirements
 
@@ -240,6 +239,7 @@ Como cliente, quiero conocer el descuento y total final antes de pagar; como adm
 - **NFR-013**: Las fechas y horas de la tienda MUST presentarse en hora de Perú; los reclamos MUST incluir una fecha límite calculada en días hábiles.
 - **NFR-014**: Las acciones de gestión y estados MUST conservar actor, fecha, entidad afectada y cambio para revisión administrativa.
 - **NFR-015**: Las instrucciones y afirmaciones de cultivo MUST derivarse del contenido aprobado del kit; si falta información, el sistema no presenta recomendaciones inventadas.
+- **NFR-016**: El checkout MUST mostrar de forma clara el precio total y las condiciones antes de aceptar, no preseleccionar cargos opcionales ni ocultar alternativas de pago o costos relevantes.
 
 ### Business Rules
 
@@ -256,34 +256,28 @@ Como cliente, quiero conocer el descuento y total final antes de pagar; como adm
 - **BR-011**: Los distritos sin cobertura no pueden generar pedidos y toda tarifa de entrega se muestra antes de confirmar.
 - **BR-012**: Solo un descuento es aplicable por pedido; precio, descuento y cargos visibles antes de confirmar forman parte del historial inmutable.
 - **BR-013**: El plazo comercial de devolución por cambio de opinión es 7 días calendario desde la entrega, con kit completo, sellado y sin uso; no reduce derechos legales por defecto o falta de conformidad.
-- **BR-014**: Un reembolso simulado no repone stock hasta inspección favorable del producto devuelto.
+- **BR-014**: Un reembolso simulado por devolución no repone stock hasta inspección favorable del producto devuelto; una cancelación antes del despacho repone de inmediato las unidades no enviadas.
 - **BR-015**: Ventas netas excluyen pedidos no aprobados y restan reembolsos; las unidades más vendidas se netean contra devoluciones.
 - **BR-016**: Cada queja o reclamo debe recibir una respuesta escrita dentro de 15 días hábiles y conservar código y evidencia de respuesta.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Cliente**: Cuenta, datos de perfil, credenciales protegidas y rol; puede tener direcciones y pedidos.
-- **Dirección**: Datos de entrega asociados a un cliente; el pedido conserva una copia de los datos utilizados al confirmar.
-- **Producto**: Kit con categoría, especie/variedad, dificultad, espacio y luz recomendados, precio, imágenes, contenido, instrucciones y estado de publicación. El inventario registra stock físico, reservado y disponible.
-- **Categoría**: Agrupación de productos del catálogo.
-- **Carrito**: Selección temporal de productos y cantidades de un cliente.
-- **Pedido**: Compra de un cliente con líneas, dirección histórica, importes, estado, fecha y eventos.
-- **Línea de pedido**: Producto, cantidad, precio histórico y subtotal al confirmar.
-- **Pago simulado**: Intento asociado a un pedido, resultado, importe y fechas de cambio.
-- **Movimiento de inventario**: Entrada, ajuste, reserva, venta, liberación o devolución con cantidad, motivo, fecha y responsable.
-- **Tarifa de entrega**: Distrito habilitado y tarifa fija vigente mostrada durante checkout.
-- **Reserva de inventario**: Unidades retenidas por un pedido Pendiente de pago y hora de expiración.
-- **Reembolso simulado**: Registro de devolución del importe simulado, motivo, pedido y decisión administrativa.
-- **Libro de Reclamaciones**: Queja o reclamo con datos del consumidor, importe, producto/servicio, detalle, pedido, código y respuesta escrita.
-- **Promoción o cupón**: Descuento, periodo de vigencia, condiciones y estado.
-- **Reclamo o devolución**: Solicitud de un cliente vinculada a un pedido, motivo, descripción, estado, respuesta e historial.
-- **Solicitud de atención**: Consulta derivada al equipo de atención, referencia, cliente si está autenticado, descripción y estado.
-- **Evento de estado**: Cambio de estado de pedido, pago o solicitud con fecha, responsable y estado anterior y nuevo.
-- **Tarifa de entrega**: Distrito habilitado y tarifa fija visible en checkout.
-- **Reserva de stock**: Cantidad del producto apartada para un pedido, con vencimiento a los 15 minutos y estado de conversión o liberación.
-- **Reembolso simulado**: Devolución ficticia total o parcial del importe con causa, importe, pedido y fecha.
-- **Hoja del Libro de Reclamaciones**: Código, fecha, consumidor, producto/servicio, importe, detalle, pedido solicitado, respuesta y fecha límite.
-
+- **Usuario y rol**: Correo único, credencial protegida, estado de cuenta y rol Cliente o Administrador; un Visitante no tiene cuenta.
+- **Perfil y dirección**: Datos de contacto del Cliente y direcciones; cada Pedido guarda una copia inmutable de la dirección y distrito usados al confirmar.
+- **Categoría**: Clasificación administrable; las iniciales son Verduras, Frutas pequeñas y Plantas aromáticas.
+- **Kit de cultivo**: Especie/variedad, dificultad, espacio y luz, contenido y cantidades, instrucciones, imágenes, precio y estado de publicación.
+- **Carrito**: Líneas temporales con kit, cantidad, precio visible y descuento elegible.
+- **Tarifa de entrega**: Distrito atendido y tarifa fija vigente al confirmar.
+- **Pedido**: Cliente, dirección histórica, estado, fechas, subtotal, descuentos, tarifa, total y eventos.
+- **Línea de pedido**: Kit y descripción, precio unitario histórico, cantidad, descuento e importe de línea.
+- **Reserva de inventario**: Producto, cantidad, pedido y vencimiento de 15 minutos, con estado de conversión o liberación.
+- **Movimiento de inventario**: Entrada, ajuste, reserva, venta, liberación o devolución con cantidad, motivo, responsable y fecha.
+- **Intento de pago simulado**: Pedido, importe, resultado, fecha, intento anterior y resolución; no contiene información bancaria.
+- **Promoción o cupón**: Tipo e importe de descuento, vigencia, productos/categorías elegibles, subtotal mínimo y estado.
+- **Queja o reclamo**: Datos de consumidor, producto/servicio, importe, detalle, pedido solicitado, código correlativo, plazo y respuesta escrita.
+- **Solicitud de devolución**: Pedido/línea, motivo, fecha, decisión, recepción, inspección, reembolso simulado e impacto en stock.
+- **Solicitud de atención**: Referencia, consulta, cliente/contacto, estado, respuestas e historial.
+- **Evento de auditoría**: Actor, fecha/hora, entidad afectada y cambio de estado o datos relevantes.
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
@@ -297,37 +291,22 @@ Como cliente, quiero conocer el descuento y total final antes de pagar; como adm
 - **SC-007**: Al menos 9 de cada 10 participantes pueden consultar el estado de un pedido propio, registrar una solicitud de atención y encontrar su confirmación sin asistencia.
 - **SC-008**: Un administrador de prueba puede completar desde la interfaz la actualización de un producto, un ajuste de stock, la atención de una solicitud y la consulta de ventas y productos más vendidos.
 
-## Assumptions
-
-- El lanzamiento inicial atiende a clientes y administradores en español y muestra importes en soles peruanos.
-- Los pagos son simulaciones de demostración; no existe una pasarela real ni se capturan datos de tarjetas.
-- Se asume inicialmente una única tienda y un único inventario lógico; no se especifican sucursales ni vendedores externos.
-- El visitante puede explorar catálogo y fichas sin cuenta; se requiere una cuenta para comprar y consultar información personal.
-- Los resultados de pago son seleccionables en el entorno de demostración y se distinguen claramente de pagos reales.
-- Un pedido pendiente de pago retiene stock durante 15 minutos; vencido ese plazo se cancela y libera la reserva.
-- Los cupones vencidos o no elegibles se rechazan; una promoción automática y un cupón nunca se acumulan en un pedido.
-- El periodo del dashboard y los reportes puede seleccionarse; las estadísticas se calculan con pedidos registrados y sus estados de pago.
-- El chatbot solo utiliza contenido aprobado por el administrador y deriva preguntas no resueltas a una solicitud de atención.
-- La tienda configura distritos atendidos y una tarifa fija por distrito; el checkout muestra la tarifa antes de confirmar.
-- La primera cuenta Administrador se establece mediante un proceso seguro de puesta en marcha, nunca por registro público.
-- Los estados de reclamos y devoluciones usan los flujos definidos en los requisitos funcionales; se conserva su historial.
-- La tienda no incorpora funciones de marketplace, recomendaciones automáticas, dispositivos conectados ni seguimiento de transportistas.
-
-
-
-
-
-
-
-
-- No se integran pasarelas de pago reales, transportistas, marketplace ni dispositivos conectados; los pagos y reembolsos son simulados.
-- El Libro de Reclamaciones debe contar con enlace visible y accesible y respuesta escrita en un máximo de 15 días hábiles, según la información de [Indecopi](https://consumidor.gob.pe/libro-de-reclamaciones/) y la [Ley publicada en El Peruano](https://busquedas.elperuano.pe/dispositivo/NL/2457203-1).
-
-
-
-
 - **SC-009**: El 100% de los reclamos de prueba recibe código, fecha límite y respuesta escrita dentro de 15 días hábiles.
 - **SC-010**: Con 100 sesiones simultáneas, el 95% de búsquedas y consultas de carrito responde en menos de 2 segundos, excluyendo latencia de red.
 - **SC-011**: Los reportes de prueba coinciden con pagos aprobados menos reembolsos y unidades pagadas menos devoluciones, según el periodo seleccionado.
 
+## Assumptions
+
+- La primera versión cubre una sola tienda, un solo inventario lógico, clientes y administradores; no es un marketplace.
+- El catálogo, precios y estados son públicos; el carrito de visitante es temporal y comprar o consultar pedidos requiere cuenta.
+- La cobertura y tarifa fija de cada distrito se configuran por un Administrador; no se integra seguimiento con transportistas.
+- El primer Administrador se crea mediante un procedimiento seguro de puesta en marcha; el registro público nunca permite elevar privilegios.
+- Los resultados de pago y reembolso son simulados; no se solicitan datos de tarjeta ni se realizan transacciones reales.
+- La reserva de stock dura 15 minutos; se cancela al vencer si no hay aprobación.
+- El descuento se elige automáticamente entre los beneficios elegibles para aplicar el de mayor ahorro; no se acumulan.
+- El chatbot solo responde con información de producto aprobada; no genera consejos no validados ni modifica pedidos.
+- Los reportes usan la hora de Perú, consideran pagos aprobados menos reembolsos y unidades vendidas menos devueltas.
+- El checkout presenta precios finales con los impuestos aplicables incluidos y no oculta cargos ni preselecciona opciones de pago.
+- No se incluyen pasarela de pago real, marketplace, dispositivos conectados, recomendaciones automáticas ni seguimiento externo de envíos.
+- El Libro de Reclamaciones mantiene enlace visible, acceso sin cargas innecesarias y respuesta escrita dentro de 15 días hábiles, conforme a [Indecopi](https://consumidor.gob.pe/libro-de-reclamaciones/), la [Ley publicada en El Peruano](https://busquedas.elperuano.pe/dispositivo/NL/2457203-1) y el [Decreto Legislativo 1729](https://busquedas.elperuano.pe/dispositivo/NL/2486266-3). La regla se revisará frente a cualquier actualización regulatoria antes del lanzamiento.
 

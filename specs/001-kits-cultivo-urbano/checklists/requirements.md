@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — hay 2 dudas sobre devoluciones y entregas.
+- [x] No [NEEDS CLARIFICATION] markers remain — no quedan aclaraciones sin resolver.
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,11 @@
 
 ## Notes
 
-- Las aclaraciones pendientes impiden fijar el alcance definitivo y completar la preparación para `$speckit-plan`.
+- Las decisiones resueltas cubren roles, catálogo, checkout, pagos, inventario, estados de pedido, devoluciones, reclamos, chatbot, promociones y reportes.
 - Las métricas de éxito son objetivos de aceptación propuestos y deberán medirse durante la verificación del producto.
 - Items marked incomplete require spec updates before `$speckit-clarify` or `$speckit-plan`.
+
+
 
 
 
